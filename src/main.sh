@@ -7,7 +7,8 @@ set -e
 SOURCE_TYPE=""
 SOURCE_CONTENT=""
 FORMAT="png"
-WIDTH="1200"
+WIDTH="794" # A4 Web Print Standard Width
+HEIGHT="1123" # A4 Web Print Standard Height
 FULL_PAGE="false"
 
 while [[ "$#" -gt 0 ]]; do
@@ -16,6 +17,7 @@ while [[ "$#" -gt 0 ]]; do
         --source_content) SOURCE_CONTENT="$2"; shift ;;
         --format) FORMAT="$2"; shift ;;
         --width) WIDTH="$2"; shift ;;
+        --height) HEIGHT="$2"; shift ;;
         --full_page) FULL_PAGE="true"; ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -84,7 +86,7 @@ fi
 # 4. Wait for network idle
 # 5. Take screenshot
 CMD="npx --yes agent-browser set device \"Desktop Chrome HiDPI\""
-CMD="$CMD && npx --yes agent-browser set viewport \"$WIDTH\" 800"
+CMD="$CMD && npx --yes agent-browser set viewport \"$WIDTH\" \"$HEIGHT\""
 CMD="$CMD && npx --yes agent-browser open \"$TARGET_URL\""
 CMD="$CMD && npx --yes agent-browser wait --load networkidle"
 

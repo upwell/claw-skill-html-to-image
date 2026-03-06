@@ -21,9 +21,14 @@ inputs:
     default: "png"
   - name: width
     type: integer
-    description: "Viewport width in pixels."
+    description: "Viewport width in pixels (A4 portrait default is 794)."
     required: false
-    default: 1200
+    default: 794
+  - name: height
+    type: integer
+    description: "Viewport height in pixels (A4 portrait default is 1123)."
+    required: false
+    default: 1123
   - name: full_page
     type: boolean
     description: "Whether to capture the full scrollable page."
@@ -45,5 +50,6 @@ When using this skill to generate an image, provide the `source_type` and `sourc
 - **source_type**: The content format (`url`, `file`, or `code`).
 - **source_content**: The target URL, absolute file path, or HTML code block.
 - **format**: The desired image format (`png`, `jpeg`, or `webp`). Default is `png`.
-- **width**: The width of the browser viewport. Default is 1200px.
+- **width**: The width of the browser viewport. Default is 794px (A4).
+- **height**: The height of the browser viewport. Default is 1123px (A4).
 - **full_page**: Set to `true` to take a full page screenshot instead of just the viewport.
