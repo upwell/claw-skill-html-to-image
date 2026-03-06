@@ -1,0 +1,16 @@
+# Operating System Files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Directories
+output/
+
+# Temporary Files
+screenshot.png
+*~
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
