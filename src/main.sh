@@ -49,7 +49,28 @@ elif [ "$SOURCE_TYPE" = "file" ]; then
     fi
 elif [ "$SOURCE_TYPE" = "code" ]; then
     TMP_HTML=$(mktemp /tmp/html_to_image_XXXXXX.html)
-    echo "$SOURCE_CONTENT" > "$TMP_HTML"
+    cat > "$TMP_HTML" <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            background: white;
+            /* Hide overflow to prevent scrollbars from generating whitespace */
+            overflow: hidden;
+            width: fit-content;
+            height: fit-content;
+        }
+    </style>
+</head>
+<body>
+$SOURCE_CONTENT
+</body>
+</html>
+EOF
     TARGET_URL="file://${TMP_HTML}"
 else
     echo '{"status": "error", "message": "Invalid source_type. Must be url, file, or code."}'
@@ -57,10 +78,14 @@ else
 fi
 
 # Construct agent-browser command chain
-# 1. Open URL
-# 2. Wait for network idle
-# 3. Take screenshot
-CMD="npx --yes agent-browser open \"$TARGET_URL\""
+# 1. Set HiDPI device profile for sharp text
+# 2. Set viewport (width, and a reasonable height)
+# 3. Open URL
+# 4. Wait for network idle
+# 5. Take screenshot
+CMD="npx --yes agent-browser set device \"Desktop Chrome HiDPI\""
+CMD="$CMD && npx --yes agent-browser set viewport \"$WIDTH\" 800"
+CMD="$CMD && npx --yes agent-browser open \"$TARGET_URL\""
 CMD="$CMD && npx --yes agent-browser wait --load networkidle"
 
 SCREENSHOT_CMD="npx --yes agent-browser screenshot"
