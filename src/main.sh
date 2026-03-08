@@ -79,50 +79,76 @@ else
     exit 1
 fi
 
-# Construct agent-browser command chain
-# 1. Set HiDPI device profile for sharp text
-# 2. Set viewport (width, and a reasonable height)
-# 3. Open URL
-# 4. Wait for network idle
-# 5. Take screenshot
+# Construct base agent-browser command chain
 CMD="npx --yes agent-browser set device \"Desktop Chrome HiDPI\""
 CMD="$CMD && npx --yes agent-browser set viewport \"$WIDTH\" \"$HEIGHT\""
 CMD="$CMD && npx --yes agent-browser open \"$TARGET_URL\""
 CMD="$CMD && npx --yes agent-browser wait --load networkidle"
 
-SCREENSHOT_CMD="npx --yes agent-browser screenshot"
-if [ "$FULL_PAGE" = "true" ]; then
-    SCREENSHOT_CMD="${SCREENSHOT_CMD} --full"
-fi
-CMD="$CMD && ${SCREENSHOT_CMD} \"$OUTPUT_PATH\""
+# Execute loading
+eval "$CMD" > /dev/null 2>&1
 
-# Execute
-eval "$CMD" > /dev/null 2>&1 || {
-    echo "{\"status\": \"error\", \"message\": \"Failed to execute agent-browser rendering chain. Command: $CMD\"}"
-    [ -n "$TMP_HTML" ] && rm -f "$TMP_HTML"
+if [ $? -ne 0 ]; then
+    echo '{"status": "error", "message": "Failed to load page."}'
     exit 1
-}
-
-# Cleanup temp
-[ -n "$TMP_HTML" ] && rm -f "$TMP_HTML"
-
-# Get file size safely (macOS stat command vs Linux)
-if [ "$(uname)" = "Darwin" ]; then
-    FILE_SIZE=$(stat -f%z "$OUTPUT_PATH" 2>/dev/null || echo 0)
-else
-    FILE_SIZE=$(stat -c%s "$OUTPUT_PATH" 2>/dev/null || echo 0)
 fi
 
-# Output standard JSON
-cat <<EOF
-{
-  "status": "success",
-  "message": "Image generated successfully via agent-browser.",
-  "data": {
-    "output_path": "$OUTPUT_PATH",
-    "size_bytes": $FILE_SIZE,
-    "format": "$FORMAT",
-    "source_type": "$SOURCE_TYPE"
-  }
-}
-EOF
+# Get body height to calculate pagination
+BOX_JSON=$(npx --yes agent-browser get box "body" --json 2>/dev/null)
+BODY_HEIGHT=$(echo "$BOX_JSON" | grep -o '"height":[0-9]*' | awk -F':' '{print $2}')
+
+# Fallback if height parsing fails
+if [ -z "$BODY_HEIGHT" ]; then
+    BODY_HEIGHT=$HEIGHT
+fi
+
+# Calculate number of pages based on viewport height (ceiling division)
+PAGES=$(( (BODY_HEIGHT + HEIGHT - 1) / HEIGHT ))
+if [ "$PAGES" -lt 1 ]; then PAGES=1; fi
+
+# Override to 1 page if user explicitly requested a unified full_page screenshot
+if [ "$FULL_PAGE" = "true" ]; then
+    PAGES=1
+fi
+
+if [ "$PAGES" -eq 1 ]; then
+    # Single page output logic
+    SCREENSHOT_CMD="npx --yes agent-browser screenshot"
+    if [ "$FULL_PAGE" = "true" ]; then SCREENSHOT_CMD="$SCREENSHOT_CMD --full"; fi
+    eval "$SCREENSHOT_CMD \"$OUTPUT_PATH\"" > /dev/null 2>&1
+    
+    if [ $? -eq 0 ] && [ -f "$OUTPUT_PATH" ]; then
+        SIZE=$(wc -c < "$OUTPUT_PATH" | tr -d ' ')
+        echo "{\"status\": \"success\", \"message\": \"Image generated successfully via agent-browser.\", \"data\": {\"output_path\": \"$OUTPUT_PATH\", \"size_bytes\": $SIZE, \"format\": \"$FORMAT\", \"source_type\": \"$SOURCE_TYPE\", \"pages\": 1}}"
+    else
+        echo '{"status": "error", "message": "Failed to generate image."}'
+    fi
+else
+    # Multi-page output logic
+    GENERATED_FILES=()
+    BASENAME=$(basename "$OUTPUT_PATH")
+    DIRNAME=$(dirname "$OUTPUT_PATH")
+    EXT="${BASENAME##*.}"
+    NAME="${BASENAME%.*}"
+    
+    for ((i=1; i<=PAGES; i++)); do
+        PAGE_OUTPUT="${DIRNAME}/${NAME}_page${i}.${EXT}"
+        
+        # Scroll down by exact viewport height before taking screenshots after page 1
+        if [ $i -gt 1 ]; then
+             npx --yes agent-browser scroll down $HEIGHT > /dev/null 2>&1
+        fi
+        
+        npx --yes agent-browser screenshot "$PAGE_OUTPUT" > /dev/null 2>&1
+        
+        if [ -f "$PAGE_OUTPUT" ]; then
+            GENERATED_FILES+=("\"$PAGE_OUTPUT\"")
+        fi
+    done
+    
+    FILES_JSON=$(IFS=,; echo "[${GENERATED_FILES[*]}]")
+    echo "{\"status\": \"success\", \"message\": \"Generated $PAGES images via agent-browser.\", \"data\": {\"output_paths\": $FILES_JSON, \"format\": \"$FORMAT\", \"source_type\": \"$SOURCE_TYPE\", \"pages\": $PAGES}}"
+fi
+
+[ -n "$TMP_HTML" ] && rm -f "$TMP_HTML" || true
+
